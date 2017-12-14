@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+
+<html>
+
+<head th:include="common/head :: header('MuR')"></head>
+<body>
+	<div id="app" class="wrapper">
+    <el-row class="container">
+      <el-col :span="24" class="header">
+        <el-col :span="10" class="logo logo-width">
+          {{sysName}}
+        </el-col>
+        <el-col :span="4" class="userinfo">
+          <el-dropdown  trigger="hover">
+            <span class="el-dropdown-link userinfo-inner" th:text="${session.user.name}"></span></span>
+            <el-dropdown-menu slot="dropdown">
+              <el-dropdown-item @click.native="modifyPassword">修改密码</el-dropdown-item>
+              <el-dropdown-item divided @click.native="logout">退出登录</el-dropdown-item>
+            </el-dropdown-menu>
+          </el-dropdown>
+        </el-col>
+      </el-col>
+      <el-col :span="24" class="main">
+        <aside class="menu-expanded">
+          <!-- 导航菜单 -->
+          <el-menu default-active="0" class="el-menu-vertical-demo" :default-active="activeIndex" background-color="#324157" text-color="#fff">
+            <template v-for="(item,index) in menus">
+              <el-submenu :index="index+''">
+                <template slot="title"><i :class="item.icon"></i>{{item.title}}</template>
+                <el-menu-item v-for="child in item.children" :name="child.title" :index="child.id" :key="child.path" @click="addTabs(child)">{{child.title}}</el-menu-item>
+              </el-submenu>
+            </template>
+          </el-menu>
+        </aside>
+        <section class="content-container">
+	       	 <el-tabs v-model="activeIndex" type="card" v-if="tabs.length" closable @tab-remove="tabremove">
+                <el-tab-pane v-for="(item, index) in tabs" :key="item.id" :label="item.name" :name="item.id">
+                	<iframe :name="item.id" scrolling="auto" :src="item.path" frameborder="0" style="width:100%;height:650px;"></iframe>
+                </el-tab-pane>
+              </el-tabs>
+              <el-dialog title="修改密码" :visible.sync="modifyPassVisible">
+		      	<el-form ref="passForm" :model="passForm" :rules="passRule" label-width="80px">
+		      		<el-form-item label="密码" prop="pass" required>
+		      			<el-input type="password" v-model="passForm.pass"></el-input>
+		      		</el-form-item>
+		      		<el-form-item label="新密码" prop="checkPass" required>
+		      			<el-input  type="password" v-model="passForm.checkPass"></el-input>
+		      		</el-form-item>
+		      		<el-form-item label="确认密码" prop="checkPass2" required>
+		      			<el-input type="password" v-model="passForm.checkPass2"></el-input>
+		      		</el-form-item>
+		      	</el-form>
+				<span slot="footer" class="dialog-footer"> 
+					<el-button @click="modifyPassVisible = false">取 消</el-button> 
+					<el-button type="primary" @click="changePass" :loading="changePassSub">确 定</el-button>
+				</span> 
+		  	</el-dialog>
+        </section>
+      </el-col> 
+    </el-row>
+  </div>
+</body>
+<script>
+	var app = new Vue({
+		el: "#app",
+		data () {
+		      var validatePass = (rule, value, callback) => {
+		        if (value === '') {
+		          callback(new Error('请输入密码'))
+		        } else {
+		          if (this.passForm.checkPass !== '') {
+		            this.$refs.passForm.validateField('checkPass')
+		          }
+		          callback()
+		        }
+		      }
+		      var validatePass2 = (rule, value, callback) => {
+		        if (value === '') {
+		          callback(new Error('请输入新密码'))
+		        } else if (value === this.passForm.pass) {
+		          callback(new Error('新密码不能与原始密码一致'))
+		        } else {
+		          callback()
+		        }
+		      }
+		      var validatePass3 = (rule, value, callback) => {
+		        if (value === '') {
+		          callback(new Error('请再次输入新密码'))
+		        } else if (value !== this.passForm.checkPass) {
+		          callback(new Error('两次输入密码不一致!'))
+		        } else {
+		          callback()
+		        }
+			  }
+		      return {
+		        activeIndex: '',
+		        sysName: 'MuR',
+		        modifyPassVisible: false,
+		        formLabelWidth: '100px',
+		        changePassSub: false,
+		        passForm: {
+		          pass: '',
+		          checkPass: '',
+		          checkPass2: ''
+		        },
+		        passRule: {
+		          pass: [
+		            {validator: validatePass, trigger: 'blur'}
+		          ],
+		          checkPass: [
+		            {validator: validatePass2, trigger: 'blur'}
+		          ],
+		          checkPass2: [
+		            {validator: validatePass3, trigger: 'blur'}
+		          ]
+		        },
+		        menus: [],
+		        tabs: []
+		      }
+		    },
+		    mounted: function(){
+		    	this.initMenu();
+		    },
+		    methods: {
+		      // 点击菜单，tabs增加页面
+		      addTabs (menu) {
+		        let flag = false
+		        for (let i = 0; i < this.tabs.length; i++) {
+		          if (this.tabs[i].id === menu.id) {
+		            flag = true
+		            break
+		          }
+		        }
+		        if (!flag) {
+		          this.tabs.push({id: menu.id, name: menu.title, path: menu.path})
+		          console.log(menu.path);
+		        }
+		        this.activeIndex = menu.id
+		      },
+		      // 关闭tab，刷新菜单选中项和tabs选中项
+		      tabremove (targetName) {
+		        let index = 0
+		        for (let tab of this.tabs) {
+		          if (tab.id === targetName) {
+		            break
+		          }
+		          index++
+		        }
+		        this.tabs.splice(index, 1)
+		        if (targetName === this.activeIndex) {
+		          if (this.tabs.length > 0) {
+		            this.activeIndex = this.tabs[index - 1].id
+		          } else {
+		            this.activeIndex = ''
+		          }
+		        }
+		      },
+		      logout () {
+		        this.$confirm('确认退出系统', '提示', {
+		          confirmButtonText: '确定',
+		          cancelButtonText: '取消',
+		          type: 'warning'
+		        }).then(() => {
+		        	$.ajax({
+                        url:'/logout',
+                        type:'get', //GET
+                        async:true,    //或false,是否异步
+                        success:function(data,textStatus,jqXHR){
+                        	window.location.href="/login";
+                        },
+                        error:function(xhr,textStatus){
+                        	var msg = eval('('+ xhr.responseText +')')
+                			_this.$message.error(msg.msg);
+                        },
+                        complete:function(){
+                        }
+                    })
+		        }).catch(() => {
+
+		        })
+		      },
+		      modifyPassword () {
+		        this.modifyPassVisible = true
+		        this.$refs['passForm'].resetFields();
+		      },
+		      cancelPass (targetName) {
+		        console.log(targetName)
+		        this.$refs[targetName].resetFields()
+		      },
+		      resetForm (formName) {
+		        this.$refs[formName].resetFields()
+		      },
+		      changePass () {
+		    	  var _this = this;
+		    	  this.changePassSub = true;
+		    	  $.ajax({
+                      url:'/user/changePass',
+                      type:'post', //GET
+                      async:true,    //或false,是否异步
+                      data: _this.passForm,
+                      success:function(data,textStatus,jqXHR){
+                    	  _this.modifyPassVisible = false;
+                    	  _this.$message.success({message:data.msg, type: 'success'});
+                      },
+                      error:function(xhr,textStatus){
+                      	var msg = eval('('+ xhr.responseText +')')
+                      	 _this.$alert(msg.msg, '', {
+                      		type:'error'
+				        });
+                      },
+                      complete:function(){
+                    	  _this.changePassSub = false;
+                      }
+                  });
+		      },
+		      initMenu(){
+		    	  var _this = this;
+		    	  $.ajax({
+                      url:'/menu/getAllMenu',
+                      type:'get', //GET
+                      async:true,    //或false,是否异步
+                      success:function(data,textStatus,jqXHR){
+                    	  _this.menus = data;
+                    	  console.log(_this.menus);
+                      },
+                      error:function(xhr,textStatus){
+                      	 _this.$alert('菜单加载错误', '', {
+                      		type:'error'
+				        });
+                      }
+                  });
+		      }
+		 }
+	})
+</script>
+<style>
+.container {
+    position: absolute;
+    top: 0px;
+    bottom: 1px;
+    right: 1px;
+    width: 100%;
+    height: 100%;
+  }
+  .header {
+    height: 60px;
+    line-height: 60px;
+    background: #205A69;
+    color: #fff;
+  }
+  .userinfo {
+    text-align: right;
+    padding-right: 35px;
+    float: right;
+  }
+
+  .userinfo-inner{
+    color: #fff;
+  }
+  .logo {
+    height: 60px;
+    font-size: 22px;
+    padding-left: 20px;
+    padding-right: 20px;
+    border-color: rgba(238, 241, 146, 0.3);
+    border-right-width: 1px;
+    border-right-style: solid;
+    float: left;
+  }
+  img {
+    width: 40px;
+    float: left;
+    margin: 10px 10px 10px 18px;
+  }
+  .logo-width{
+    width:230px;
+  }
+
+  .main {
+    display: flex;
+    position: absolute;
+    top: 60px;
+    bottom: 0px;
+    overflow: hidden;
+  }
+  aside {
+    flex:0 0 230px;
+    width: 230px;
+    background-color: #324157;
+  }
+  .menu-expanded{
+    flex:0 0 230px;
+    width: 230px;
+  }
+  .content-container {
+    flex: 1;
+    overflow: hidden;
+    padding: 20px;
+    height: 100%;
+    
+  }
+  .breadcrumb-container .title {
+    width: 200px;
+    float: left;
+    color: #475669;
+  }
+</style>
+</html>

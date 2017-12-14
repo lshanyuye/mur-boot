@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head th:include="common/head :: header('角色管理')"></head>
+
+<body>
+<div id="app">
+	<el-row :gutter="10" type="flex" justify="end" class="row">
+		<el-col :span="4">
+			<el-input placeholder="编码/名称" v-model="condition.text"></el-input>
+		</el-col>
+		<el-col :span="2">
+			<el-button type="primary" icon="el-icon-search" @click="searchRole"></el-button>
+		</el-col>
+	</el-row>
+	<el-row class="row">
+		<shiro:hasPermission name="addRole">
+			<el-button type="primary" @click="addRole">新增角色</el-button>
+		</shiro:hasPermission>
+	</el-row>
+	<el-row class="row">
+	<el-table :data = "roleData" style="width:100%" ref="roleTable" border>
+		<el-table-column prop="code" label="角色编码"></el-table-column>
+		<el-table-column prop="name" label="角色名称"></el-table-column>
+		<el-table-column prop="albm" label="操作" fixed="right" width="160px;">
+			<template slot-scope="scope">
+				<shiro:hasPermission name="editRole">
+				    <el-button type="text" size="small" @click="editRole(scope.row)">编辑</el-button>
+				</shiro:hasPermission>
+				<shiro:hasPermission name="delRole">
+				    <el-button type="text" size="small" @click="delRole(scope.row)">删除</el-button>
+				</shiro:hasPermission>	
+				<shiro:hasPermission name="grantRole">		    
+				    <el-button type="text" size="small" @click="authRole(scope.row)">授权</el-button>
+				</shiro:hasPermission>				    
+			</template>
+		</el-table-column>
+	</el-table>
+  </el-table>
+	<div align="center">
+		<el-pagination  @size-change="handleSizeChange"  @current-change="handleCurrentChange" :page-count="pageCount" :page-size="pageSize" :current-page="currentPage" layout="total, sizes, prev, pager, next, jumper"  :total="total">
+	    </el-pagination>
+    </div>
+    </el-row>
+    <el-dialog title="新增/编辑角色" :visible.sync="addOrEditRole" :close-on-click-modal="closeOnModal">
+    	<el-form :model="roleForm" ref="roleForm" :rules="roleRule" label-width="80px">
+			<el-form-item label="角色编码" prop="code">
+				<el-input v-model="roleForm.code" :disabled="isEdited"></el-input>
+			</el-form-item>
+			<el-form-item label="角色名称" prop="name">
+				<el-input v-model="roleForm.name"></el-input>
+			</el-form-item>
+    	</el-form>
+    	<span slot="footer" class="dialog-footer"> 
+			<el-button @click="addOrEditRole = false">取 消</el-button> 
+			<el-button type="primary" :loading="addOrEditRoleLoading" @click="saveRole">确 定</el-button>
+		</span> 
+    </el-dialog>
+    <el-dialog title="角色授权" :visible.sync="isAuth">
+   	 <el-tree :data="menuItems" ref="menuItemTree" :props="defaultProps" check-strictly node-key="id" show-checkbox default-expand-all>
+    	</el-tree>
+    	<div class="tree-footer">
+    		<el-button @click="savePermission">保存</el-button>
+    	</div>
+    </el-dialog>
+</div>
+</body>
+<script>
+	var app = new Vue({
+		el: "#app",
+		data () {
+			return {
+				field:'',
+				roleData: [],
+				pageSize: 20,
+				total: 0,
+				currentPage:1,
+				pageCount:0,
+				queryColumns: [{val:'code', name: '角色编码'},{val:'name', name: '角色名称'},{val:'state', name: '状态'}],
+				addOrEditRole: false,
+				isEdited: false,
+				closeOnModal: false,
+				addOrEditRoleLoading: false,
+				roleForm: {},
+				condition:{
+					text:''
+				},
+				roleRule: {
+					code:[
+						{required: true, message: '请输入角色编码', trigger: 'blur'}
+					],
+					name: [
+						{required: true, message: '请输入角色名称', trigger: 'blur'}
+					]
+				},
+				menuItems:[],
+				defaultProps:{label: 'title', children:'children'},
+				selectedMenuItem:[],
+				selectedRoleId:'',
+				isAuth: false,
+				baseStatus: []
+			}
+		},
+		mounted(){
+			this.refreshRoleData();
+			this.initRoleForm();
+			this.initMenuItems();
+		},
+		methods: {
+			handleSizeChange(){
+				this.refreshRoleData();
+			},
+			handleCurrentChange(){
+				this.refreshRoleData();
+			},
+			refreshRoleData(){
+				var url = '/role/listPage';
+				var params = {
+					pageSize: this.pageSize,
+					currentPage: this.currentPage,
+					code: this.condition.text,
+					name: this.condition.text
+				};
+				var _this = this;
+				$.ajax({
+				    url:url,
+				    type:'post', //GET
+				    async:true,    //或false,是否异步
+				    data: params,
+				    success:function(data,textStatus,jqXHR){
+				 	   _this.roleData = data.result;
+				 	   _this.total = data.total;
+				    },
+				    error:function(xhr,textStatus){
+				    	var msg = eval('('+ xhr.responseText +')');
+						_this.$message.error(msg.msg);
+				    },
+				    complete:function(){
+				    }
+				});
+			},
+			searchRole(){
+				this.refreshRoleData();
+			},
+		    addRole(){
+		    	this.addOrEditRole = true;
+		    	this.isEdited = false;
+		    	this.$refs['roleForm'].resetFields();
+		    	this.initRoleForm();
+		    },
+		    saveRole(){
+		    	this.addOrEditRoleLoading = true;
+		    	var _this = this;
+		    	$.ajax({
+                    url:'/role/save',
+                    type:'post',
+                    async:true,
+                    data: _this.roleForm,
+                    success:function(data,textStatus,jqXHR){
+                  	  _this.addOrEditRole = false;
+                  	  _this.$message({message:data.msg, type: 'success'});
+                  	  _this.refreshRoleData();
+                    },
+                    error:function(xhr,textStatus){
+                    	var msg = eval('('+ xhr.responseText +')')
+                    	 _this.$alert(msg.msg, '', {
+                    		type:'error'
+				        });
+                    },
+                    complete:function(){
+                  	  _this.addOrEditRoleLoading = false;
+                    }
+                });
+		    },
+		    delRole(role){
+		    	if(role == null){
+		    		this.$alert('请选中角色', '', {type:'error'});
+		    	}else{
+		    		var _this = this;
+		    		this.$confirm('确认删除此角色?', '提示', {
+			            confirmButtonText: '确定',
+			            cancelButtonText: '取消',
+			            type: 'warning'
+			         }).then(() => {
+			        	 $.ajax({
+			                    url:'/role/del/'+role.id,
+			                    type:'get',
+			                    async:true,
+			                    success:function(data,textStatus,jqXHR){
+			                  	  	_this.$message({message:data.msg, type: 'success'});
+			                  		_this.refreshRoleData();
+			                    },
+			                    error:function(xhr,textStatus){
+			                    	var msg = eval('('+ xhr.responseText +')')
+			                    	 _this.$alert(msg.msg, '', {
+			                    		type:'error'
+							        });
+			                    },
+			                    complete:function(){
+			                    }
+			                });
+			          }).catch(() => {      
+			          });
+		    	}
+		    },
+		    initRoleForm(id){
+		    	if(id == undefined){
+		    		this.roleForm = {
+							id:'',
+							code:'',
+							name:''
+						}
+		    	}else {
+		    		var _this = this;
+		    		$.ajax({
+	                    url:'/role/findRoleById/'+ id,
+	                    type:'get',
+	                    async:true,
+	                    success:function(data,textStatus,jqXHR){
+	                    	_this.roleForm = data.data;
+	                    },
+	                    error:function(xhr,textStatus){
+	                    	var msg = eval('('+ xhr.responseText +')')
+	                    	 _this.$alert(msg.msg, '', {
+	                    		type:'error'
+					        });
+	                    },
+	                    complete:function(){
+	                    }
+	                });
+		    	}
+		    },
+		    editRole(role){
+		    	this.isEdited = true;
+		    	if(role == null){
+		    		this.$alert('请选中角色', '', {type:'error'});
+		    	}else{
+			    	this.initRoleForm(role.id);
+			    	this.addOrEditRole = true;
+		    	}
+		    },
+		    initMenuItems(){
+		    	var _this = this;
+		    	$.ajax({
+                    url:'/menu/getAllMenuItem',
+                    type:'get',
+                    async:true,
+                    success:function(data,textStatus,jqXHR){
+                    	_this.menuItems = data;
+                    },
+                    error:function(xhr,textStatus){
+                    	var msg = eval('('+ xhr.responseText +')')
+                    	 _this.$alert(msg.msg, '', {
+                    		type:'error'
+				        });
+                    },
+                    complete:function(){
+                    }
+                });
+		    },
+		    authRole(role){
+		    	this.selectedRoleId = role.id;
+	    		var _this = this;
+	    		_this.isAuth = true;
+	    		$.ajax({
+                    url:'/role/permission/'+_this.selectedRoleId,
+                    type:'get',
+                    async:true,
+                    success:function(data,textStatus,jqXHR){
+                    	_this.$refs.menuItemTree.setCheckedKeys(data);
+                    	
+                    },
+                    error:function(xhr,textStatus){
+                    	var msg = eval('('+ xhr.responseText +')')
+                    	 _this.$alert(msg.msg, '', {
+                    		type:'error'
+				        });
+                    }
+                });
+		    },
+		    savePermission(){
+		    	var selectNodes = this.$refs.menuItemTree.getCheckedNodes();
+		    	var nodeIds = [];
+		    	$.each(selectNodes, function(i,val){
+		    		nodeIds.push(val.id);
+		    	});
+		    	var _this = this;
+		    	$.ajax({
+                    url:'/role/permission/grant/'+ _this.selectedRoleId,
+                    type:'post',
+                    async:true,
+                    data: JSON.stringify(nodeIds),
+                    contentType: 'application/json',
+                    success:function(data,textStatus,jqXHR){
+                    	_this.selectedRoleId = "";
+        	    		_this.isAuth = false;
+                    	_this.$message({message:data.msg, type: 'success'});
+                    },
+                    error:function(xhr,textStatus){
+                    	var msg = eval('('+ xhr.responseText +')')
+                    	 _this.$alert(msg.msg, '', {
+                    		type:'error'
+				        });
+                    }
+                });
+		    }
+		}
+	})
+</script>
+</html>

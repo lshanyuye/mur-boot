@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<menus>
+	<menuItem id="permission" title="权限管理" orderBy="1">
+		<menuItem id="user" title="用户管理" path="/user/index" orderBy="1">
+			<menuItem id="addUser" title="新增" type="1" orderBy="1"></menuItem>
+			<menuItem id="editUser" title="修改" type="1" orderBy="2"></menuItem>
+			<menuItem id="delUser" title="删除" type="1" orderBy="3"></menuItem>
+		</menuItem>
+		<menuItem id="role" title="角色管理" path="/role/index" orderBy="2">
+			<menuItem id="addRole" title="新增" type="1" orderBy="1"></menuItem>
+			<menuItem id="editRole" title="修改" type="1" orderBy="2"></menuItem>
+			<menuItem id="delRole" title="删除" type="1" orderBy="3"></menuItem>
+			<menuItem id="grantRole" title="授权" type="1" orderBy="4"></menuItem>
+		</menuItem>
+	</menuItem>
+	<menuItem id="sysResouce" title="系统资源管理" orderBy="2">
+		<menuItem id="dict" title="数据字典" path="/dict/index" orderBy="1">
+			<menuItem id="addDict" title="新增" type="1" orderBy="1"></menuItem>
+			<menuItem id="editDict" title="修改" type="1" orderBy="2"></menuItem>
+			<menuItem id="delDict" title="删除" type="1" orderBy="3"></menuItem>
+		</menuItem>
+	</menuItem>
+
+</menus>

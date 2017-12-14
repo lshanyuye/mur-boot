@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh_CN" xmlns:th="http://www.thymeleaf.org"
+		xmlns:shiro="http://www.pollix.at/thymeleaf/shiro">
+
+<head th:include="common/head :: header('用户管理')"></head>
+
+<body>
+<div id="app">
+	<el-row :gutter="10" type="flex" justify="end" class="row">
+		<el-col :span="4">
+			<el-input placeholder="帐号/用户名" v-model="condition.text"></el-input>
+		</el-col>
+		<el-col :span="4">
+			<el-select style = "width:100%" placeholder="状态" v-model="condition.enabled" clearable>
+					<el-option v-for="item in baseStatus" :key="item.code" :label="item.name" :value="item.code"></el-option>
+			</el-select>
+		</el-col>		
+		<el-col :span="2">
+			<el-button type="primary" icon="el-icon-search" @click="searchUser"></el-button>
+		</el-col>
+	</el-row>
+	<el-row class="row">
+		<el-col>
+			<shiro:hasPermission name="addUser">
+				<el-button type="primary" @click="addUser">新增用户</el-button>
+			</shiro:hasPermission>
+		</el-col>
+	</el-row>	
+	<el-row class="row">		
+	<el-table :data = "userData" style="width:100%" ref="userTable" border>
+		<el-table-column prop="accounts" label="帐号" is_query="true"></el-table-column>
+		<el-table-column prop="name" label="用户名"></el-table-column>
+		<el-table-column prop="state" label="状态" :formatter="formatter"></el-table-column>
+		<el-table-column prop="expireDate" label="失效日期"></el-table-column>
+		<el-table-column prop="roleNames" label="关键角色"></el-table-column>
+		<el-table-column label="操作" fixed="right" width="160px;">
+			<template slot-scope="scope">
+				<shiro:hasPermission name="editUser"> 
+			    	<el-button type="text" size="small" @click="editUser(scope.row)">编辑</el-button>
+			    </shiro:hasPermission>
+			    <shiro:hasPermission name="delUser"> 
+			    	<el-button type="text" size="small" @click="delUser(scope.row)">删除</el-button>
+			    </shiro:hasPermission>
+			</template>
+		</el-table-column>
+	</el-table>
+  </el-table>
+	<div align="center">
+		<el-pagination  @size-change="handleSizeChange"  @current-change="handleCurrentChange" :page-count="pageCount" :page-size="pageSize" :current-page="currentPage" layout="total, sizes, prev, pager, next, jumper"  :total="total">
+	    </el-pagination>
+    </div>
+    </el-row>
+    <el-dialog title="新增/编辑用户" :visible.sync="addOrEditUser" :close-on-click-modal="closeOnModal">
+    	<el-form :model="userForm" ref="userForm" :rules="userRule" label-width="80px">
+			<el-form-item label="账户" prop="accounts">
+				<el-input v-model="userForm.accounts" :disabled="isEdited"></el-input>
+			</el-form-item>
+			<el-form-item label="用户名" prop="name">
+				<el-input v-model="userForm.name"></el-input>
+			</el-form-item>
+			<el-form-item label="状态">
+				<el-switch v-model="userForm.enabled">
+				</el-switch>
+			</el-form-item>
+			<el-form-item label="失效日期" prop="expireDate">
+				<el-date-picker value-format="yyyy-MM-dd HH:mm:ss" v-model="userForm.expireDate"></el-date-picker>
+			</el-form-item>
+			<el-form-item label="关联角色">
+				<el-select multiple placeholder="选择角色" style = "width:100%" v-model="userForm.roleIds">
+					<el-option v-for="item in roles" :key="item.id" :label="item.name"  :value="item.id"></el-option>
+				</el-select>
+			</el-form-item>
+    	</el-form>
+    	<span slot="footer" class="dialog-footer"> 
+			<el-button @click="addOrEditUser = false">取 消</el-button> 
+			<el-button type="primary" :loading="addOrEditUserLoading" @click="saveUser">确 定</el-button>
+		</span> 
+    </el-dialog>
+</div>
+</body>
+<script>
+	var app = new Vue({
+		el: "#app",
+		data () {
+			return {
+				field:'',
+				userData: [],
+				pageSize: 20,
+				total: 0,
+				currentPage:1,
+				pageCount:0,
+				addOrEditUser: false,
+				addOrEditUserLoading: false,
+				closeOnModal: false,
+				isEdited: false,
+				userForm: {},
+				condition: {
+					text: '',
+					enabled:''
+				},
+				userRule: {
+					accounts:[
+						{required: true, message: '请输入账户', trigger: 'blur'}
+					],
+					name: [
+						{required: true, message: '请输入用户名', trigger: 'blur'}
+					]
+				},
+				roles:[],//角色
+				baseStatus: []
+			}
+		},
+		mounted(){
+			this.initBaseStatus();
+			this.refreshUserData();
+			this.initRoles();
+			this.initUserForm();
+		},
+		methods: {
+			handleSizeChange(){
+				this.refreshUserData();
+			},
+			handleCurrentChange(){
+				this.refreshUserData();
+			},
+			refreshUserData(){
+				var url = '/user/queryPage';
+				var params = {
+					pageSize: this.pageSize,
+					currentPage: this.currentPage,
+					accounts: this.condition.text,
+					name: this.condition.text,
+					enabled: this.condition.enabled
+				};
+				var _this = this;
+				$.ajax({
+				    url:url,
+				    type:'post', //GET
+				    async:true,    //或false,是否异步
+				    data: params,
+				    success:function(data,textStatus,jqXHR){
+				 	   _this.userData = data.result;
+				 	   _this.total = data.total;
+				    },
+				    error:function(xhr,textStatus){
+				    	var msg = eval('('+ xhr.responseText +')');
+						_this.$message.error(msg.msg);
+				    },
+				    complete:function(){
+				  	  _this.changePassSub = false;
+				    }
+				});
+			},
+			searchUser(){
+				this.refreshUserData();
+			},
+			formatter(row, column) {
+				var value = '-';
+				$.each(this.baseStatus, function(i,val){
+            		if(val.code == row.enabled){
+            			value = val.name;
+            		}
+            	});
+				return value;
+		    },
+		    addUser(){
+		    	this.addOrEditUser = true;
+		    	this.isEdited = false;
+		    	this.$refs['userForm'].resetFields();
+		    	this.initUserForm();
+		    },
+		    saveUser(){
+		    	this.addOrEditUserLoading = true;
+		    	var _this = this;
+		    	$.ajax({
+                    url:'/user/save',
+                    type:'post',
+                    contentType:'application/json;charset=UTF-8',
+                    async:true,
+                    data: JSON.stringify(_this.userForm),
+                    success:function(data,textStatus,jqXHR){
+                  	  _this.addOrEditUser = false;
+                  	  _this.$message({message:data.msg, type: 'success'});
+                  	  _this.refreshUserData();
+                    },
+                    error:function(xhr,textStatus){
+                    	var msg = eval('('+ xhr.responseText +')')
+                    	 _this.$alert(msg.msg, '', {
+                    		type:'error'
+				        });
+                    },
+                    complete:function(){
+                  	  _this.addOrEditUserLoading = false;
+                    }
+                });
+		    },
+		    delUser(user){
+		    	if(user == null){
+		    		this.$alert('请选中用户', '', {type:'error'});
+		    	}else{
+		    		var _this = this;
+		    		this.$confirm('确认删除此用户?', '提示', {
+			            confirmButtonText: '确定',
+			            cancelButtonText: '取消',
+			            type: 'warning'
+			         }).then(() => {
+			        	 $.ajax({
+			                    url:'/user/del/'+user.id,
+			                    type:'get',
+			                    async:true,
+			                    success:function(data,textStatus,jqXHR){
+			                  	  	_this.$message({message:data.msg, type: 'success'});
+			                  		_this.refreshUserData();
+			                    },
+			                    error:function(xhr,textStatus){
+			                    	var msg = eval('('+ xhr.responseText +')')
+			                    	 _this.$alert(msg.msg, '', {
+			                    		type:'error'
+							        });
+			                    },
+			                    complete:function(){
+			                    }
+			                });
+			          }).catch(() => {      
+			          });
+		    	}
+		    },
+		    initUserForm(id){
+		    	if(id == undefined){
+		    		this.userForm = {
+		    				id:'',
+							accounts:'',
+							name:'',
+							expireDate:'',
+							roleIds: [],
+							enabled: true
+						}
+		    	}else{
+		    		var _this = this;
+		    		$.ajax({
+	                    url:'/user/findUserById/'+ id,
+	                    type:'get',
+	                    async:true,
+	                    success:function(data,textStatus,jqXHR){
+	                    	$.each(_this.userForm, function(i,val){
+	                    		_this.userForm[i]=data.data[i];
+	                    	});
+	                    },
+	                    error:function(xhr,textStatus){
+	                    	var msg = eval('('+ xhr.responseText +')')
+	                    	 _this.$alert(msg.msg, '', {
+	                    		type:'error'
+					        });
+	                    },
+	                    complete:function(){
+	                    }
+	                });
+		    	}
+		    },
+		    editUser(user){
+		    	if(user == null){
+		    		this.$alert('请选中用户', '', {type:'error'});
+		    	}else{
+		    		this.addOrEditUser = true;
+		    		this.isEdited = true;
+			    	this.initUserForm(user.id);
+		    	}
+		    },
+		    initRoles(){
+		    	var _this = this;
+		    	$.ajax({
+                    url:'/role/all',
+                    async:true,
+                    success:function(data,textStatus,jqXHR){
+                    	_this.roles = data;
+                    },
+                    error:function(xhr,textStatus){
+                    	var msg = eval('('+ xhr.responseText +')')
+                    	 _this.$alert('加载角色信息失败', '', {type:'error'});
+                    },
+                    complete:function(){
+                    }
+                });
+		    },
+		    initBaseStatus(){
+		    	var _this = this;
+		    	$.ajax({
+				    url:'/dict/filter/BaseStatus',
+				    type:'get', //GET
+				    async:true,    //或false,是否异步
+				    success:function(data,textStatus,jqXHR){
+				 	   _this.baseStatus = data;
+				    },
+				    error:function(xhr,textStatus){
+				    	var msg = eval('('+ xhr.responseText +')');
+						_this.$message.error(msg.msg);
+				    }
+		    	});
+		    }
+		}
+	})
+</script>
+<style>
+</style>
+</html>

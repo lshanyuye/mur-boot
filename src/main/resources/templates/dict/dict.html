@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh_CN" xmlns:th="http://www.thymeleaf.org"
+		xmlns:shiro="http://www.pollix.at/thymeleaf/shiro">
+
+<head th:include="common/head :: header('用户管理')"></head>
+
+<body>
+<div id="app">
+	<el-row :gutter="20">
+		<!-- 组数据字典 -->
+		<el-col :span="12">
+			<el-row type="flex" justify="end" class="row" :gutter="10"> 
+				<el-col :span="8">
+					<el-input placeholder="编码/名称" v-model="condition1.text"></el-input>
+				</el-col>
+				<el-col :span="3">
+					<el-button type="primary" icon="el-icon-search" @click="searchDict('group')"></el-button>
+				</el-col>
+			</el-row>
+			<el-row class="row">
+				<el-col>
+					<shiro:hasPermission name="addDict">
+						<el-button type="primary" @click="addDict('group')">新增</el-button>
+					</shiro:hasPermission>
+				</el-col>
+			</el-row>
+			<el-row class="row">
+				<el-col>
+					<el-table :data = "groupDictData" style="width:100%" ref="groupTable" border @row-dblclick="selectGroupDict">
+						<el-table-column prop="code" label="编码"></el-table-column>
+						<el-table-column prop="name" label="名称"></el-table-column>
+						<el-table-column prop="enabled" label="状态" :formatter="formatter"></el-table-column>
+						<el-table-column label="操作" fixed="right" width="160px;">
+							<template slot-scope="scope">
+								<shiro:hasPermission name="editDict">
+						    		<el-button type="text" size="small" @click="editDict(scope.row)">编辑</el-button>
+						    	</shiro:hasPermission>
+						    	<shiro:hasPermission name="delDict">
+						    		<el-button type="text" size="small" @click="delDict(scope.row,'group')">删除</el-button>
+						    	</shiro:hasPermission>
+							</template>
+						</el-table-column>
+					</el-table>
+					<div align="center">
+						<el-pagination  @size-change="handleSizeChange"  @current-change="handleCurrentChange" :page-count="pageCount" :page-size="pageSize" :current-page="currentPage" layout="total, sizes, prev, pager, next, jumper"  :total="total">
+					    </el-pagination>
+				    </div>
+				</el-col>
+			</el-row>
+		</el-col>	
+		<!-- 子数据字典 -->
+		<el-col :span="12">
+			<el-row type="flex" justify="end" class="row" :gutter="10"> 
+				<el-col :span="8">
+					<el-input placeholder="编码/名称" v-model="condition2.text"></el-input>
+				</el-col>
+				<el-col :span="3">
+					<el-button type="primary" icon="el-icon-search" @click="searchDict('child')"></el-button>
+				</el-col>
+			</el-row>
+			<el-row class="row">
+				<el-col>
+					<shiro:hasPermission name="addDict">
+						<el-button type="primary" @click="addDict('child')">新增</el-button>
+					</shiro:hasPermission>
+				</el-col>
+			</el-row>
+			<el-row class="row"> 
+				<el-col>
+					<el-table :data = "dictData" style="width:100%" ref="dictData" border>
+						<el-table-column prop="code" label="编码"></el-table-column>
+						<el-table-column prop="name" label="名称"></el-table-column>
+						<el-table-column prop="enabled" label="状态" :formatter="formatter"></el-table-column>
+						<el-table-column label="操作" fixed="right" width="160px;">
+							<template slot-scope="scope">
+								<shiro:hasPermission name="editDict">
+						    		<el-button type="text" size="small" @click="editDict(scope.row)">编辑</el-button>
+						    	</shiro:hasPermission>
+						    	<shiro:hasPermission name="delDict">
+						    		<el-button type="text" size="small" @click="delDict(scope.row,'child')">删除</el-button>
+						    	</shiro:hasPermission>
+							</template>
+						</el-table-column>
+					</el-table>
+				</el-col>
+			</el-row>
+		</el-col>	
+	</el-row>
+	<el-dialog title="新增/编辑数据字典" :visible.sync="addOrEditDict" :close-on-click-modal="closeOnModal">
+    	<el-form :model="dictForm" ref="dictForm" :rules="dictRule" label-width="80px">
+    		<el-form-item label="上级">
+				<el-select style = "width:100%" placeholder="" v-model="dictForm.pid" disabled>
+					<el-option v-for="item in dicts" :key="item.id" :label="item.name" :value="item.id"></el-option>
+				</el-select>
+			</el-form-item>
+			<el-form-item label="编码" prop="code">
+				<el-input v-model="dictForm.code" :disabled="isEdited"></el-input>
+			</el-form-item>
+			<el-form-item label="名称" prop="name">
+				<el-input v-model="dictForm.name"></el-input>
+			</el-form-item>
+			<el-form-item label="状态">
+				<el-switch v-model="dictForm.enabled"></el-switch>
+			</el-form-item>
+    	</el-form>
+    	<span slot="footer" class="dialog-footer"> 
+			<el-button @click="addOrEditDict = false">取 消</el-button> 
+			<el-button type="primary" :loading="addOrEditDictLoading" @click="saveDict">确 定</el-button>
+		</span> 
+    </el-dialog>
+</div>
+</body>
+<script>
+	var app = new Vue({
+		el: "#app",
+		data () {
+			return {
+				condition:{
+					text:''
+				},
+				groupDictData:[],
+				dictData:[],
+				selectGroupId:'',
+				pageCount: 0,
+				pageSize: 20,
+				currentPage: 1,
+				total: 0,
+				condition1:{
+					text:'',
+					enabled:''
+				},
+				condition2:{
+					text:'',
+					enabled:''
+				},
+				closeOnModal: false,
+				addOrEditDict: false,
+				isAddChild: false,
+				dictForm: {},
+				dictRule:{
+					code:[
+						{required: true, message: '请输入字典编码', trigger: 'blur'}
+					],
+					name: [
+						{required: true, message: '请输入字典名称', trigger: 'blur'}
+					]
+				},
+				isEditGroup: true,
+				isEdited: false,
+				addOrEditDictLoading: false,
+				dicts: [],
+				baseStatus: []
+			}
+		},
+		mounted(){
+			this.initBaseStatus();
+			this.initDictForm();
+			this.initDicts();
+			this.initDictForm();
+			this.refreshGroupDictData();
+		},
+		methods: {
+			searchDict(type){
+				if("group" == type){
+					this.selectGroupId = '';
+					this.refreshGroupDictData();
+					this.refreshDictData();
+				}else if("child" == type){
+					this.refreshDictData();
+				}
+			},
+			addDict(type){
+				if("group" == type){
+					this.isEditGroup = true;
+					this.isAddChild = false;
+				}else if("child" == type){
+					this.isEditGroup = false;
+					this.isAddChild = true;
+					if(this.selectGroupId == ''){
+						 this.$alert('请先选择左边的数据字典，作为上级', '', {type:'error'});
+						 return;
+					}
+				}
+				this.isEdited = false;
+				this.addOrEditDict = true;
+				this.initDictForm();
+				this.$refs['dictForm'].resetFields();
+			},
+			editDict(data){
+				this.isEdited = true;
+				this.addOrEditDict = true;
+				this.initDictForm(data.id);
+			},
+			delDict(dict, type){
+				if(dict == null){
+		    		this.$alert('请选中数据', '', {type:'error'});
+		    	}else{
+		    		var _this = this;
+		    		this.$confirm('确认删除此数据字典?', '提示', {
+			            confirmButtonText: '确定',
+			            cancelButtonText: '取消',
+			            type: 'warning'
+			         }).then(() => {
+			        	 $.ajax({
+			                    url:'/dict/'+dict.id,
+			                    type:'delete',
+			                    async:true,
+			                    success:function(data,textStatus,jqXHR){
+			                  	  	_this.$message({message:data.msg, type: 'success'});
+			                  	  	if(type == 'group'){
+			                  	  		_this.selectGroupId = '';
+			                  	  		_this.refreshGroupDictData();
+			                  			_this.refreshDictData();
+			                  	  	}else if(type == 'child'){
+			                  	  		_this.refreshDictData();
+			                  	  	}
+			                    },
+			                    error:function(xhr,textStatus){
+			                    	var msg = eval('('+ xhr.responseText +')')
+			                    	 _this.$alert(msg.msg, '', {
+			                    		type:'error'
+							        });
+			                    },
+			                    complete:function(){
+			                    }
+			                });
+			          }).catch(() => {      
+			          });
+		    	}
+			},
+			formatter(row, column) {
+				var value = '-';
+				$.each(this.baseStatus, function(i,val){
+            		if(val.code == row.enabled){
+            			value = val.name;
+            		}
+            	});
+				return value;
+		    },
+		    refreshGroupDictData(){//刷新字典组列表数据
+		    	var url = '/dict/page';
+		    	var params = {
+	    			pageSize: this.pageSize,
+					currentPage: this.currentPage,
+					code: this.condition1.text,
+					name: this.condition1.text,
+					enabled: this.condition1.enabled
+		    	};
+		    	var _this = this;
+		    	$.ajax({
+				    url:url,
+				    type:'post', //GET
+				    async:true,    //或false,是否异步
+				    data: params,
+				    success:function(data,textStatus,jqXHR){
+				 	   _this.groupDictData = data.records;
+				 	   _this.total = data.total;
+				    },
+				    error:function(xhr,textStatus){
+				    	var msg = eval('('+ xhr.responseText +')');
+						_this.$message.error(msg.msg);
+				    }
+				});
+		    },
+		    refreshDictData(){//刷新字典列表数据
+		    	var url = '/dict/filter';
+		    	var params = {
+					code: this.condition2.text,
+					name: this.condition2.text,
+					enabled: this.condition1.enabled,
+					pid: this.selectGroupId
+		    	};
+		    	var _this = this;
+		    	$.ajax({
+				    url:url,
+				    type:'post', //GET
+				    async:true,    //或false,是否异步
+				    data: params,
+				    success:function(data,textStatus,jqXHR){
+				 	   _this.dictData = data;
+				    },
+				    error:function(xhr,textStatus){
+				    	var msg = eval('('+ xhr.responseText +')');
+						_this.$message.error(msg.msg);
+				    }
+		    	});
+		    },
+		    handleSizeChange(){
+		    	this.selectGroupId = '';
+		    	this.refreshGroupDictData();
+		    	this.refreshDictData();
+		    },
+		    handleCurrentChange(){
+		    	this.selectGroupId = '';
+		    	this.refreshGroupDictData();
+		    	this.refreshDictData();
+		    },
+		    initDictForm(id){//初始化表单数据
+		    	if(id == undefined){
+		    		this.dictForm = {
+							id:'',
+							pid:'',
+							code:'',
+							name:'',
+							enabled: true
+					}
+		    		if(this.isAddChild){
+		    			this.dictForm.pid = this.selectGroupId;
+		    		}
+		    	}else{
+		    		var _this = this;
+		    		$.ajax({
+	                    url:'/dict/'+ id,
+	                    type:'get',
+	                    async:true,
+	                    success:function(data,textStatus,jqXHR){
+	                    	$.each(_this.dictForm, function(i,val){
+	                    		_this.dictForm[i]=data[i];
+	                    	});
+	                    },
+	                    error:function(xhr,textStatus){
+	                    	var msg = eval('('+ xhr.responseText +')')
+	                    	 _this.$alert(msg.msg, '', {
+	                    		type:'error'
+					        });
+	                    }
+	                });
+		    	}
+		    },
+		    saveDict(){
+		    	this.addOrEditDictLoading = true;
+		    	var _this = this;
+		    	$.ajax({
+                    url:'/dict/',
+                    type:'post',
+                    contentType:'application/json;charset=UTF-8',
+                    async:true,
+                    data: JSON.stringify(_this.dictForm),
+                    success:function(data,textStatus,jqXHR){
+                  	  _this.addOrEditDict = false;
+                  	  _this.$message({message:data.msg, type: 'success'});
+                  	  _this.refreshGroupDictData();
+                  	  _this.refreshDictData();
+                  	  _this.initDicts();
+                    },
+                    error:function(xhr,textStatus){
+                    	var msg = eval('('+ xhr.responseText +')')
+                    	 _this.$alert(msg.msg, '', {
+                    		type:'error'
+				        });
+                    },
+                    complete:function(){
+                  	  _this.addOrEditDictLoading = false;
+                    }
+                });
+		    },
+		    initDicts(){
+		    	var url = '/dict/filter';
+		    	var params = {
+					enabled: true,
+					isGroup: true
+		    	};
+		    	var _this = this;
+		    	$.ajax({
+				    url:url,
+				    type:'post', //GET
+				    async:true,    //或false,是否异步
+				    data: JSON.stringify(params),
+				    success:function(data,textStatus,jqXHR){
+				 	   _this.dicts = data;
+				    },
+				    error:function(xhr,textStatus){
+				    	var msg = eval('('+ xhr.responseText +')');
+						_this.$message.error(msg.msg);
+				    }
+		    	});
+		    },
+		    selectGroupDict(row, event){//组数据字典双击事件
+		    	this.selectGroupId = row.id;
+		    	this.refreshDictData();
+		    },
+		    initBaseStatus(){
+		    	var _this = this;
+		    	$.ajax({
+				    url:'/dict/filter/BaseStatus',
+				    type:'get', //GET
+				    async:true,    //或false,是否异步
+				    success:function(data,textStatus,jqXHR){
+				 	   _this.baseStatus = data;
+				    },
+				    error:function(xhr,textStatus){
+				    	var msg = eval('('+ xhr.responseText +')');
+						_this.$message.error(msg.msg);
+				    }
+		    	});
+		    }
+		}
+	})
+</script>
+<style>
+</style>
+</html>
